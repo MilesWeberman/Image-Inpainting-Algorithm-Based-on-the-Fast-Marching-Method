@@ -94,8 +94,6 @@ def _inpaint_point(img, distance_map, flags, y, x):
     # update inpainting value
     img[y,x] = numerator/denominator
 
-    
-
 # solves a finite difference discretization of the Eikonal equation (eqn 3 in Telea's paper)
 def _solve_eikonal(distance_map, y, x):  
     return
