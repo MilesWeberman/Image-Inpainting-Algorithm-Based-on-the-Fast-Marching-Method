@@ -32,7 +32,7 @@ def _init(mask, radius, height, width):
                 if mask[nb_y, nb_x] == 0: 
                     flags[nb_y, nb_x] = BAND 
                     distance_map[nb_y, nb_x] = 0.0
-                    heapq.heappush(band, (nb_y, nb_x)) # TODO: maybe it's redundant adding distance map value at that point !!!! distance_map[nb_y, nb_x]
+                    heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) # TODO: maybe it's redundant adding distance map value at that point !!!! distance_map[nb_y, nb_x]
     #Might need to compute distances in future 
     return distance_map, flags, band
 
@@ -94,15 +94,6 @@ def _inpaint_point(img, distance_map, flags, y, x):
     # update inpainting value
     img[y,x] = numerator/denominator
 
-# solves a finite difference discretization of the Eikonal equation (eqn 3 in Telea's paper)
-def _solve_eikonal(distance_map, y, x):  
-    return
-
-def inpaint(img, mask):
-    # TODO: error handling: make sure both image have same size
-    # TODO: figure out how ot work with 3 channels and where to separate grey one, look at Telea (change _inpaint_point accordingly)
-    height,width = img.shape
-    return
 
 
 
