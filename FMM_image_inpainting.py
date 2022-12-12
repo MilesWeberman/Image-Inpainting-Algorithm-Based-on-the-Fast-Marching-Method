@@ -6,7 +6,7 @@ import cv2 as cv
 img = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Pic.png')
 mask = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Mask.png',0)
 
-img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+#img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 # mask = cv.cvtColor(mask, cv.COLOR_BGR2GRAY)
 
 KNOWN = 0
@@ -98,6 +98,7 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                     else:
                         heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) # TODO: do we need to add if not already in band ??????
                         flags[nb_y, nb_x] = BAND
+    return img
 
 def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
     # TODO: fix value? parameter? function of unknown thickness (Telea 2.4)
@@ -122,12 +123,12 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
 
     #TODO: Add error handeling for the gradient and also figure out what we are going to do if one of the values is out of bounds
     #Pyheal has some thing they do but I didn't fully understand it so I did not want to add it here
-    gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
+    #gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
     
 
     # initialize inpainting value to 0 
-    numerator = 0
     denominator = 0 
+    numerators = [0,0,0]
 
     for i,j in B:
         # calculate the weight function w
@@ -143,18 +144,28 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
         w = abs(dir * dist * lev)
         # calculate inpainting value
         #gradI_ij = np.array((gradI[0][i,j], gradI[1][i,j]))
-        numerator += w * (img[i,j]) #+ np.dot(gradI,vector)) 
+        # numerator += w * (img[i,j,0]) #+ np.dot(gradI,vector)) 
+        #numerator += w * (img[i,j])
+        numerators[0] += w * img[i,j,0]
+        numerators[1] += w * img[i,j,1]
+        numerators[2] += w * img[i,j,2]
         denominator += w
 
     #update inpainting value
-    if numerator == 0:
-        print("numerator " + str(numerator))
+    # if numerator == 0:
+    #     print("numerator " + str(numerator))
 
-    if numerator/denominator >= 255:
-        print("Too high")
+    # if numerator/denominator >= 255:
+    #     print("Too high")
+    
 
         
-    img[y,x] = numerator/denominator
+    values = numerators/ denominator
+    img[y,x,0] = values[0]
+    img[y,x,1] = values[1]
+    img[y,x,2] = values[2]
+    #img[y,x] = numerator/denominator
+
 
 def _solve_eikonal(y1, x1, y2, x2, height, width, T_vals, flags):
     #check if points in image
@@ -200,21 +211,24 @@ def _solve_eikonal(y1, x1, y2, x2, height, width, T_vals, flags):
 
 def inpaint(img, mask, epsilon):
     # error handling
-    if img.shape != mask.shape:
+    height,width,w = img.shape
+    height1, width1 = mask.shape
+
+    if height != height1 or width != width1:
         raise ValueError("input image and mask are not the same size")
     # TODO: figure out how ot work with 3 channels and where to separate grey one, look at Telea (change _inpaint_point accordingly)
-    height,width = img.shape
 
     # initialization
     distance_map, flags, band = _init(mask, height, width)
-
-    # solve inpainting distance
+    
     _FMM(img, distance_map, flags, band, height, width, epsilon)
 
-    return img
+    return img 
+
+x = np.array([[1,2], [2,3]])
 
 im = inpaint(img, mask, 3)
 
-cv.imshow("Grayscale",im)
+cv.imshow("Window", im)
 cv.waitKey(0) 
 cv.destroyAllWindows()
