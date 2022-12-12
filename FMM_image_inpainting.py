@@ -3,8 +3,8 @@ import heapq
 import numpy as np
 import cv2 as cv
 
-img = cv.imread('/Users/milesweberman/Desktop/inpainting/input_img.png')
-mask = cv.imread('/Users/milesweberman/Desktop/inpainting/mask.png',0)
+img = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Pic.png')
+mask = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Mask.png',0)
 
 img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 # mask = cv.cvtColor(mask, cv.COLOR_BGR2GRAY)
@@ -62,9 +62,10 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                 if nb_y < 0 or nb_y > height or nb_x < 0 or nb_x > width: # error handling
                     continue
                 if flags[nb_y, nb_x] != KNOWN:
+                    
                     if flags[nb_y, nb_x] == INSIDE: # if that point is in the region to be inpainted
                         # march the boundary inward by adding a new point to it (step 2) and inpaint that point (step 3)
-                        flags[nb_y, nb_x] = BAND
+                        #flags[nb_y, nb_x] = BAND
                         _inpaint_point(img, distance_map, flags, epsilon, nb_y, nb_x, height, width)
                     
                     # error handling
@@ -96,6 +97,7 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                                 break
                     else:
                         heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) # TODO: do we need to add if not already in band ??????
+                        flags[nb_y, nb_x] = BAND
 
 def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
     # TODO: fix value? parameter? function of unknown thickness (Telea 2.4)
@@ -112,10 +114,16 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
     
     # calculate gradient of T at [y,x]
     gradT = np.gradient(distance_map)
+    #gradT = (distance_map[y + 1,x] - distance_map[y -1,x], distance_map[y, x + 1] - distance_map[y, x-1])
     gradT_yx = np.array((gradT[0][y,x], gradT[1][y,x]))
 
     # calculate gradient of image intensity
-    gradI = np.gradient(img)
+    #gradI = np.gradient(img)
+
+    #TODO: Add error handeling for the gradient and also figure out what we are going to do if one of the values is out of bounds
+    #Pyheal has some thing they do but I didn't fully understand it so I did not want to add it here
+    gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
+    
 
     # initialize inpainting value to 0 
     numerator = 0
@@ -124,18 +132,29 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
     for i,j in B:
         # calculate the weight function w
         vector = np.array((y-i, x-j)) # vector from neighbourhood point to point to inpaint
-        norm_vector = np.linalg.norm(vector) # TODO: check if this is the right type of norm - see documentation (by default frobenius norm)
-        dir = np.dot(gradT_yx,vector)/norm_vector
+        norm_vector = np.linalg.norm(vector,1) # TODO: check if this is the right type of norm - see documentation (by default frobenius norm)
+        
+        if gradT_yx[0] == 0 and gradT_yx[1] == 0:
+            dir = 1
+        else:
+            dir = np.dot(gradT_yx,vector)/norm_vector
         dist = 1/norm_vector**2
         lev = 1/(1 + abs(distance_map[y,x] - distance_map[i,j]))
-        w = dir * dist * lev
+        w = abs(dir * dist * lev)
         # calculate inpainting value
-        gradI_ij = np.array((gradI[0][i,j], gradI[1][i,j]))
-        numerator += w * (img[i,j] + np.dot(gradI_ij,vector)) 
+        #gradI_ij = np.array((gradI[0][i,j], gradI[1][i,j]))
+        numerator += w * (img[i,j]) #+ np.dot(gradI,vector)) 
         denominator += w
 
-    # update inpainting value
-    img[y,x] = 255#numerator/denominator
+    #update inpainting value
+    if numerator == 0:
+        print("numerator " + str(numerator))
+
+    if numerator/denominator >= 255:
+        print("Too high")
+
+        
+    img[y,x] = numerator/denominator
 
 def _solve_eikonal(y1, x1, y2, x2, height, width, T_vals, flags):
     #check if points in image
@@ -194,9 +213,8 @@ def inpaint(img, mask, epsilon):
 
     return img
 
-im = inpaint(img, mask, 5)
+im = inpaint(img, mask, 3)
 
 cv.imshow("Grayscale",im)
 cv.waitKey(0) 
 cv.destroyAllWindows()
-
