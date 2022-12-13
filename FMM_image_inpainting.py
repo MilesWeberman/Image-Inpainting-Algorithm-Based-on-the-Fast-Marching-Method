@@ -3,8 +3,8 @@ import heapq
 import numpy as np
 import cv2 as cv
 
-img = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Pic.png')
-mask = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Mask.png',0)
+img = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Inputs/input_img3.jpg')
+mask = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Inputs/mask3.jpg',0)
 
 #img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 # mask = cv.cvtColor(mask, cv.COLOR_BGR2GRAY)
@@ -33,7 +33,7 @@ def _init(mask, height, width):
                 continue
             nb_y = Y + i
             nb_x = X + j
-            if nb_y < 0 or nb_y > height or nb_x < 0 or nb_x > width: # error handling
+            if nb_y < 0 or nb_y >= height or nb_x < 0 or nb_x >= width: # error handling
                 continue
             if flags[nb_y, nb_x] == BAND:
                 continue
@@ -106,7 +106,7 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
     B = []
     for i in range(y-epsilon,y+epsilon+1):
         for j in range(x-epsilon,x+epsilon+1):
-            if i < 0 or i > height or j < 0 or j > width: # error handling
+            if i < 0 or i >= height or j < 0 or j >= width: # error handling
                 continue
             if flags[i, j] == KNOWN:
                 # check if distance to point to inpaint is smaller or equal than epsilon 
@@ -123,44 +123,58 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
 
     #TODO: Add error handeling for the gradient and also figure out what we are going to do if one of the values is out of bounds
     #Pyheal has some thing they do but I didn't fully understand it so I did not want to add it here
-    #gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
+    gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
+    grad1 = [gradI[0][0], gradI[1][0]]
+    grad2 = [gradI[0][1], gradI[1][1]]
+    grad3 = [gradI[0][2], gradI[1][2]]
     
 
     # initialize inpainting value to 0 
     denominator = 0 
     numerators = [0,0,0]
-
+    Ia = [0,0,0]
+    Jx = [0,0,0]
+    Jy = [0,0,0]
     for i,j in B:
         # calculate the weight function w
         vector = np.array((y-i, x-j)) # vector from neighbourhood point to point to inpaint
         norm_vector = np.linalg.norm(vector,1) # TODO: check if this is the right type of norm - see documentation (by default frobenius norm)
         
-        if gradT_yx[0] == 0 and gradT_yx[1] == 0:
+        dir = np.dot(gradT_yx,vector)/norm_vector
+        if dir == 0:
             dir = 1
-        else:
-            dir = np.dot(gradT_yx,vector)/norm_vector
         dist = 1/norm_vector**2
+        #print(abs(distance_map[y,x] - distance_map[i,j]))
         lev = 1/(1 + abs(distance_map[y,x] - distance_map[i,j]))
-        w = abs(dir * dist * lev)
+        #w = abs(dir * dist * lev)
+        w = abs(dir*dist*lev)
         # calculate inpainting value
-        #gradI_ij = np.array((gradI[0][i,j], gradI[1][i,j]))
-        # numerator += w * (img[i,j,0]) #+ np.dot(gradI,vector)) 
-        #numerator += w * (img[i,j])
-        numerators[0] += w * img[i,j,0]
-        numerators[1] += w * img[i,j,1]
-        numerators[2] += w * img[i,j,2]
-        denominator += w
-
-    #update inpainting value
-    # if numerator == 0:
-    #     print("numerator " + str(numerator))
-
-    # if numerator/denominator >= 255:
-    #     print("Too high")
-    
+        # numerators[0] += w * img[i,j,0] 
+        # numerators[1] += w * img[i,j,1]
+        # numerators[2] += w * img[i,j,2] 
 
         
-    values = numerators/ denominator
+        Ia[0] += w * img[i,j,0]
+        Ia[1] += w * img[i,j,1]
+        Ia[2] += w * img[i,j,2]
+
+        Jx[0] -= w * grad1[0]*vector[0]
+        Jx[1] -= w * grad2[0]*vector[0]
+        Jx[2] -= w * grad3[0]*vector[0]
+
+        Jy[0] -= w * grad1[1]*vector[1]
+        Jy[1] -= w * grad2[1]*vector[1]
+        Jy[2] -= w * grad3[1]*vector[1]
+        denominator += w
+
+    # if numerators[0] == 0 or numerators[1] == 0 or numerators[2] == 0 or denominator == 0:
+    #     print("noice")
+    
+    values = [0,0,0]
+    for i in range(0,3):
+        values[i] = Ia[i]/denominator + (Jx[i] + Jy[i])/(math.sqrt(Jx[i]* Jx[i] + Jy[i]*Jy[i]))+ 0.5
+    # values = numerators/ denominator
+
     img[y,x,0] = values[0]
     img[y,x,1] = values[1]
     img[y,x,2] = values[2]
@@ -220,14 +234,24 @@ def inpaint(img, mask, epsilon):
 
     # initialization
     distance_map, flags, band = _init(mask, height, width)
-    
+
     _FMM(img, distance_map, flags, band, height, width, epsilon)
 
     return img 
 
-x = np.array([[1,2], [2,3]])
+height, width , w = img.shape
+# width = int(src.shape[1] * scale_percent / 100)
+# height = int(src.shape[0] * scale_percent / 100)
+
+
+img = cv.resize(img, (math.floor(width/2), math.floor(height/2)))
+mask = cv.resize(mask, (math.floor(width/2), math.floor(height/2)))
+
 
 im = inpaint(img, mask, 3)
+
+
+cv.imwrite('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Results/Result_3_e3_USV2.png',im)
 
 cv.imshow("Window", im)
 cv.waitKey(0) 
