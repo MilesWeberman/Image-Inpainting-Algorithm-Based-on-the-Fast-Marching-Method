@@ -42,8 +42,7 @@ def _init(mask, height, width):
             if mask[nb_y, nb_x] == 0: 
                 flags[nb_y, nb_x] = BAND 
                 distance_map[nb_y, nb_x] = 0.0
-                heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) # TODO: maybe it's redundant adding distance map value at that point !!!! distance_map[nb_y, nb_x]
-    # TODO: might need to compute distances in future 
+                heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) 
     return distance_map, flags, band
 
 def _FMM(img, distance_map, flags, band, height, width, epsilon):
@@ -63,9 +62,7 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                     continue
                 if flags[nb_y, nb_x] != KNOWN:
                     
-                    if flags[nb_y, nb_x] == INSIDE: # if that point is in the region to be inpainted
-                        # march the boundary inward by adding a new point to it (step 2) and inpaint that point (step 3)
-                        #flags[nb_y, nb_x] = BAND
+                    if flags[nb_y, nb_x] == INSIDE: # if that point is in the region to be inpainted Inpaint those points (step 2)
                         _inpaint_point(img, distance_map, flags, epsilon, nb_y, nb_x, height, width)
                     
                     # error handling
@@ -81,11 +78,9 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                     if nb_y+1 < height and nb_x+1 < width:
                         sol4 = _solve_eikonal(nb_y+1, nb_x, nb_y, nb_x+1, height, width, distance_map, flags)
 
-                    # propagates the value T of point at [y,x] to its neighbors (step 4)
+                    # propagates the value T of point at [y,x] to its neighbors (step 3)
                     distance_map[nb_y, nb_x] = min(sol1, sol2, sol3, sol4) 
                     # (re)insert point in the heap 
-                    # TODO: if that point was in band remove it from the heap before reinserting - maybe do that before updating distance_map and so it's more efficient
-                    # TODO: make sure we're adding to heap correctly (min is based of distance map)
                     
                     if flags[nb_y, nb_x] == BAND:
                         counter = 0
@@ -96,12 +91,11 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                                 heapq.heapify(band)
                                 break
                     else:
-                        heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) # TODO: do we need to add if not already in band ??????
+                        heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x))
                         flags[nb_y, nb_x] = BAND
     return img
 
 def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
-    # TODO: fix value? parameter? function of unknown thickness (Telea 2.4)
     # find neighbourhood of point to inpaint point
     B = []
     for i in range(y-epsilon,y+epsilon+1):
@@ -110,7 +104,7 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
                 continue
             if flags[i, j] == KNOWN:
                 # check if distance to point to inpaint is smaller or equal than epsilon 
-                if np.linalg.norm(np.array((y-i,x-j))) <= epsilon: # TODO: check if this is the right type of norm - see documentation (by default frobenius norm)
+                if np.linalg.norm(np.array((y-i,x-j))) <= epsilon: 
                     B.append((i,j))
     
     # calculate gradient of T at [y,x]
@@ -121,7 +115,6 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
     # calculate gradient of image intensity
     #gradI = np.gradient(img)
 
-    #TODO: Add error handeling for the gradient and also figure out what we are going to do if one of the values is out of bounds
     #Pyheal has some thing they do but I didn't fully understand it so I did not want to add it here
     gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
     grad1 = [gradI[0][0], gradI[1][0]]
@@ -166,9 +159,6 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
         Jy[1] -= w * grad2[1]*vector[1]
         Jy[2] -= w * grad3[1]*vector[1]
         denominator += w
-
-    # if numerators[0] == 0 or numerators[1] == 0 or numerators[2] == 0 or denominator == 0:
-    #     print("noice")
     
     values = [0,0,0]
     for i in range(0,3):
