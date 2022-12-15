@@ -36,7 +36,6 @@ def _init(mask, height, width):
                 flags[nb_y, nb_x] = BAND 
                 distance_map[nb_y, nb_x] = 0.0
                 heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) 
-    
     return distance_map, flags, band
 
 def _FMM(img, distance_map, flags, band, height, width, epsilon):
@@ -56,9 +55,7 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                     continue
                 if flags[nb_y, nb_x] != KNOWN:
                     
-                    if flags[nb_y, nb_x] == INSIDE: # if that point is in the region to be inpainted
-                        # march the boundary inward by adding a new point to it (step 2) and inpaint that point (step 3)
-                        #flags[nb_y, nb_x] = BAND
+                    if flags[nb_y, nb_x] == INSIDE: # if that point is in the region to be inpainted Inpaint those points (step 2)
                         _inpaint_point(img, distance_map, flags, epsilon, nb_y, nb_x, height, width)
                     
                     # error handling
@@ -74,8 +71,9 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                     if nb_y+1 < height and nb_x+1 < width:
                         sol4 = _solve_eikonal(nb_y+1, nb_x, nb_y, nb_x+1, height, width, distance_map, flags)
 
-                    # propagates the value T of point at [y,x] to its neighbors (step 4)
-                    distance_map[nb_y, nb_x] = min(sol1 + sol2 + sol3 + sol4) 
+                    # propagates the value T of point at [y,x] to its neighbors (step 3)
+                    distance_map[nb_y, nb_x] = min(sol1, sol2, sol3, sol4) 
+                    # (re)insert point in the heap 
                     
                     # (re)insert point in the heap   
                     if flags[nb_y, nb_x] == BAND:
@@ -87,13 +85,11 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                                 heapq.heapify(band)
                                 break
                     else:
-                        heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) # TODO: do we need to add if not already in band ??????
+                        heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x))
                         flags[nb_y, nb_x] = BAND
     return img
 
 def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
-    
-
     # find neighbourhood of point to inpaint point
     B = []
     for i in range(y-epsilon,y+epsilon+1):
