@@ -1,20 +1,13 @@
 import math
 import heapq
 import numpy as np
-import cv2 as cv
-
-img = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Inputs/input_img3.jpg')
-mask = cv.imread('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Inputs/mask3.jpg',0)
-
-#img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-# mask = cv.cvtColor(mask, cv.COLOR_BGR2GRAY)
 
 KNOWN = 0
 BAND = 1
 INSIDE = 2
 
 MAX_VALUE = 1e6
-EPS = 1e-6 # TODO: idk why we need that
+EPS = 1e-6 
 
 # initializing flags and T-values
 def _init(mask, height, width):
@@ -42,8 +35,8 @@ def _init(mask, height, width):
             if mask[nb_y, nb_x] == 0: 
                 flags[nb_y, nb_x] = BAND 
                 distance_map[nb_y, nb_x] = 0.0
-                heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) # TODO: maybe it's redundant adding distance map value at that point !!!! distance_map[nb_y, nb_x]
-    # TODO: might need to compute distances in future 
+                heapq.heappush(band, (distance_map[nb_y, nb_x], nb_y, nb_x)) 
+    
     return distance_map, flags, band
 
 def _FMM(img, distance_map, flags, band, height, width, epsilon):
@@ -82,11 +75,9 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
                         sol4 = _solve_eikonal(nb_y+1, nb_x, nb_y, nb_x+1, height, width, distance_map, flags)
 
                     # propagates the value T of point at [y,x] to its neighbors (step 4)
-                    distance_map[nb_y, nb_x] = min(sol1, sol2, sol3, sol4) 
-                    # (re)insert point in the heap 
-                    # TODO: if that point was in band remove it from the heap before reinserting - maybe do that before updating distance_map and so it's more efficient
-                    # TODO: make sure we're adding to heap correctly (min is based of distance map)
+                    distance_map[nb_y, nb_x] = min(sol1 + sol2 + sol3 + sol4) 
                     
+                    # (re)insert point in the heap   
                     if flags[nb_y, nb_x] == BAND:
                         counter = 0
                         for k in band:
@@ -101,16 +92,19 @@ def _FMM(img, distance_map, flags, band, height, width, epsilon):
     return img
 
 def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
-    # TODO: fix value? parameter? function of unknown thickness (Telea 2.4)
+    
+
     # find neighbourhood of point to inpaint point
     B = []
     for i in range(y-epsilon,y+epsilon+1):
         for j in range(x-epsilon,x+epsilon+1):
             if i < 0 or i >= height or j < 0 or j >= width: # error handling
                 continue
+            if i == epsilon and j == epsilon:
+                continue
             if flags[i, j] == KNOWN:
                 # check if distance to point to inpaint is smaller or equal than epsilon 
-                if np.linalg.norm(np.array((y-i,x-j))) <= epsilon: # TODO: check if this is the right type of norm - see documentation (by default frobenius norm)
+                if np.linalg.norm(np.array((y-i,x-j))) <= epsilon: 
                     B.append((i,j))
     
     # calculate gradient of T at [y,x]
@@ -121,20 +115,26 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
     # calculate gradient of image intensity
     #gradI = np.gradient(img)
 
-    #TODO: Add error handeling for the gradient and also figure out what we are going to do if one of the values is out of bounds
-    #Pyheal has some thing they do but I didn't fully understand it so I did not want to add it here
-    gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
-    grad1 = [gradI[0][0], gradI[1][0]]
-    grad2 = [gradI[0][1], gradI[1][1]]
-    grad3 = [gradI[0][2], gradI[1][2]]
     
+
+
+    #This section code chunk is for using the method similar to openCV
+    #Ended up using the version wihtout the gradient in the final algorithm
+    # gradI = (img[y + 1,x] - img[y -1,x], img[y, x + 1] - img[y, x-1])
+    # grad1 = [gradI[0][0], gradI[1][0]]
+    # grad2 = [gradI[0][1], gradI[1][1]]
+    # grad3 = [gradI[0][2], gradI[1][2]]
+
+    # Ia = [0,0,0]
+    # Jx = [0,0,0]
+    # Jy = [0,0,0]
+
+
 
     # initialize inpainting value to 0 
     denominator = 0 
     numerators = [0,0,0]
-    Ia = [0,0,0]
-    Jx = [0,0,0]
-    Jy = [0,0,0]
+
     for i,j in B:
         # calculate the weight function w
         vector = np.array((y-i, x-j)) # vector from neighbourhood point to point to inpaint
@@ -142,43 +142,46 @@ def _inpaint_point(img, distance_map, flags, epsilon, y, x, height, width):
         
         dir = np.dot(gradT_yx,vector)/norm_vector
         if dir == 0:
-            dir = 1
+            dir = EPS
         dist = 1/norm_vector**2
         #print(abs(distance_map[y,x] - distance_map[i,j]))
         lev = 1/(1 + abs(distance_map[y,x] - distance_map[i,j]))
         #w = abs(dir * dist * lev)
         w = abs(dir*dist*lev)
         # calculate inpainting value
-        # numerators[0] += w * img[i,j,0] 
-        # numerators[1] += w * img[i,j,1]
-        # numerators[2] += w * img[i,j,2] 
+        numerators[0] += w * img[i,j,0] 
+        numerators[1] += w * img[i,j,1]
+        numerators[2] += w * img[i,j,2] 
 
-        
-        Ia[0] += w * img[i,j,0]
-        Ia[1] += w * img[i,j,1]
-        Ia[2] += w * img[i,j,2]
-
-        Jx[0] -= w * grad1[0]*vector[0]
-        Jx[1] -= w * grad2[0]*vector[0]
-        Jx[2] -= w * grad3[0]*vector[0]
-
-        Jy[0] -= w * grad1[1]*vector[1]
-        Jy[1] -= w * grad2[1]*vector[1]
-        Jy[2] -= w * grad3[1]*vector[1]
         denominator += w
 
-    # if numerators[0] == 0 or numerators[1] == 0 or numerators[2] == 0 or denominator == 0:
-    #     print("noice")
+        #This section is also used for the open CV method
+        # Ia[0] += w * img[i,j,0]
+        # Ia[1] += w * img[i,j,1]
+        # Ia[2] += w * img[i,j,2]
+
+        # Jx[0] -= w * grad1[0]*vector[0]
+        # Jx[1] -= w * grad2[0]*vector[0]
+        # Jx[2] -= w * grad3[0]*vector[0]
+
+        # Jy[0] -= w * grad1[1]*vector[1]
+        # Jy[1] -= w * grad2[1]*vector[1]
+        # Jy[2] -= w * grad3[1]*vector[1]
+
     
     values = [0,0,0]
-    for i in range(0,3):
-        values[i] = Ia[i]/denominator + (Jx[i] + Jy[i])/(math.sqrt(Jx[i]* Jx[i] + Jy[i]*Jy[i]))+ 0.5
-    # values = numerators/ denominator
+
+    #This is the formual for the open CV method 
+    #To calculate the value at each pixel
+    # for i in range(0,3):
+    #     values[i] = Ia[i]/denominator + (Jx[i] + Jy[i])/(math.sqrt(Jx[i]* Jx[i] + Jy[i]*Jy[i])+ 1e-20)+ 0.5
+
+    values = numerators/ denominator
 
     img[y,x,0] = values[0]
     img[y,x,1] = values[1]
     img[y,x,2] = values[2]
-    #img[y,x] = numerator/denominator
+
 
 
 def _solve_eikonal(y1, x1, y2, x2, height, width, T_vals, flags):
@@ -230,7 +233,6 @@ def inpaint(img, mask, epsilon):
 
     if height != height1 or width != width1:
         raise ValueError("input image and mask are not the same size")
-    # TODO: figure out how ot work with 3 channels and where to separate grey one, look at Telea (change _inpaint_point accordingly)
 
     # initialization
     distance_map, flags, band = _init(mask, height, width)
@@ -239,20 +241,3 @@ def inpaint(img, mask, epsilon):
 
     return img 
 
-height, width , w = img.shape
-# width = int(src.shape[1] * scale_percent / 100)
-# height = int(src.shape[0] * scale_percent / 100)
-
-
-img = cv.resize(img, (math.floor(width/2), math.floor(height/2)))
-mask = cv.resize(mask, (math.floor(width/2), math.floor(height/2)))
-
-
-im = inpaint(img, mask, 3)
-
-
-cv.imwrite('C:/Users/jonas/Desktop/mcgill/Fourth year/Comp 558/Final project/FMM_image_inpainting/Results/Result_3_e3_USV2.png',im)
-
-cv.imshow("Window", im)
-cv.waitKey(0) 
-cv.destroyAllWindows()
