@@ -1,4 +1,4 @@
-# FMM image_inpainting
+# Implementation of an Image Inpainting Algorithm Based on the Fast Marching Method
 
 This repository contains the implementation of an image inpainting method using the Fast Marching Method. It is based on a 2006 paper by Telea which can be found in the root of the repository.
 
